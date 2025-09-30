@@ -1,0 +1,12 @@
+<launch>
+  <!-- GazeboでTurtleBot3の世界を起動 -->
+  <include file="$(find turtlebot3_gazebo)/launch/turtlebot3_world.launch" />
+  <!-- map_file を引数として渡す -->
+  <arg name="map_file" default="$(env HOME)/turtlebot3/map.yaml" />
+  <!-- turtlebot3_navigation.launch を include -->
+  <include file="$(find turtlebot3_navigation)/launch/turtlebot3_navigation.launch">
+    <arg name="map_file" value="$(arg map_file)" />
+  </include>
+  <!-- pillar centerの起動 -->
+  <node pkg="pillar_center" type="pillar_center.py" name="pillar_center" output="screen"/>
+</launch>
