@@ -2,8 +2,10 @@
 # -*- coding: utf-8 -*-
 
 import math
+import numpy as np
 import rospy
 import actionlib
+from scipy.optimize import leastsq
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
 from move_base_msgs.msg import MoveBaseAction
@@ -25,34 +27,60 @@ class PillarCenter:
     def check_move_base_status(self, event):
         state = self.move_base_client.get_state()
         self.is_active = (state == actionlib.GoalStatus.ACTIVE)
+        rospy.loginfo("move_base state: %d, is_active: %s", state, str(self.is_active))
     
     def scan_callback(self, scan):
+        
+        def fit_circle(points):
+            x = np.array([p[0] for p in points])
+            y = np.array([p[1] for p in points])
+        
+            def calc_R(xc, yc):
+                return np.sqrt((x - xc)**2 + (y - yc)**2)
+        
+            def residuals(c):
+                Ri = calc_R(*c) #タプルのアンパック　cでまとめたのを計算できるようにしている
+                return Ri - np.mean(Ri)
+        
+            center_estimate = np.mean(x), np.mean(y)
+            center_fit = leastsq(residuals, center_estimate)
+            radius_fit = np.mean(calc_R(*center_fit))
+        
+            return center_fit, radius_fit
+        
         #ゴール設定しないうちは何もしないように！
         if not self.is_active:
             return
         else:
             ranges = scan.ranges
-            pillars = []
-        
+            points = []
+            centers = []
+            
             for i in range(1, len(ranges) - 1):
-                if abs(ranges[i] - ranges[i + 1]) > 0.5 and 0.3 < ranges[i] < 2.0:
+                if abs(ranges[i] - ranges[i + 1]) > 0.3 and 0.2 < ranges[i] < 2.5:
                     #上記を満たすレーザの角度　最小値を基準
                     angle = scan.angle_min + i * scan.angle_increment
                     x = ranges[i] * math.cos(angle)
                     y = ranges[i] * math.sin(angle)
-                    pillars.append((x, y))
+                    points.append((x, y))
                 
-                if len(pillars) >= 2:
-                    #複数見れることはあるので近い最初の２本から中央距離を算出
-                    x_mid = (pillars[0][0] + pillars[1][0]) / 2
-                    y_mid = (pillars[0][1] + pillars[1][1]) / 2
-                
-                    #この座標に寄せる
-                    twist = Twist()
-                    angle_to_center = math.atan2(y_mid, x_mid) #座標から角度を出す
-                    twist.angular.z = 0.5 * angle_to_center
-                    twist.linear.x = 0.2
-                    self.cmd_pub.publish(twist)
+                if len(points) >= 7:
+                    center, radius = fit_circle(points)
+                    rospy.loginfo("Detected %d candidate points for pillar", len(points))
+                    rospy.loginfo("Fitted circle center: (%.2f, %.2f), radius: %.2f", center[0], center[1], radius)
+
+                    if 0.1 < radius < 0.6:
+                        centers.append(center)
+                        
+            if len(centers) >= 2:
+                mid_x = (centers[0][0] + centers[1][0]) / 2.0
+                mid_y = (centers[0][1] + centers[1][1]) / 2.0
+                        #この座標に寄せる
+                twist = Twist()
+                angle_to_center = math.atan2(mid_y, mid_x) #座標から角度を出す
+                twist.angular.z = 0.5 * angle_to_center
+                twist.linear.x = 0.2
+                self.cmd_pub.publish(twist)
                 
 if __name__ == "__main__":
     try:
