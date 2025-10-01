@@ -4,19 +4,14 @@
 import math
 import numpy as np
 import rospy
-import actionlib
 from scipy.optimize import leastsq
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
-from move_base_msgs.msg import MoveBaseAction
 from actionlib_msgs.msg import GoalStatusArray
 
 class PillarCenter:
     def __init__(self):
         rospy.init_node("pillar_center")
-        #move_baseのアクションを監視する
-        self.move_base_client = actionlib.SimpleActionClient("move_base", MoveBaseAction)
-        self.move_base_client.wait_for_server()
         self.is_active = False
         self.cmd_pub = rospy.Publisher("/cmd_vel", Twist, queue_size = 10)
         rospy.Subscriber("/scan", LaserScan, self.scan_callback)
