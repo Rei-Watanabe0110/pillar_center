@@ -9,6 +9,7 @@ from scipy.optimize import leastsq
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
 from move_base_msgs.msg import MoveBaseAction
+from actionlib_msgs.msg import GoalStatusArray
 
 class PillarCenter:
     def __init__(self):
@@ -19,16 +20,19 @@ class PillarCenter:
         self.is_active = False
         self.cmd_pub = rospy.Publisher("/cmd_vel", Twist, queue_size = 10)
         rospy.Subscriber("/scan", LaserScan, self.scan_callback)
-        #タイマーを使って逐一ステータスチェック
-        rospy.Timer(rospy.Duration(0.5), self.check_move_base_status)
+        rospy.Subscriber("/move_base/status", GoalStatusArray, self.check_move_base_status)
         rospy.loginfo("pillar_center and move_base_check start")
         rospy.spin()
         
-    def check_move_base_status(self, event):
-        state = self.move_base_client.get_state()
-        self.is_active = (state == actionlib.GoalStatus.ACTIVE)
-        rospy.loginfo("move_base state: %d, is_active: %s", state, str(self.is_active))
-    
+    def check_move_base_status(self, msg):
+        if msg.status_list:
+            latest_status = msg.status_list[-1].status
+            self.is_active = (latest_status == 1) #1はactive
+            rospy.loginfo("move_base status topic: %d, is_active: %s", latest_status, str(self.is_active))
+        else:
+            self.is_active = False
+            rospy.loginfo("move_base status topic: no status, is_active: False")
+               
     def scan_callback(self, scan):
         
         def fit_circle(points):
@@ -43,7 +47,7 @@ class PillarCenter:
                 return Ri - np.mean(Ri)
         
             center_estimate = np.mean(x), np.mean(y)
-            center_fit = leastsq(residuals, center_estimate)
+            center_fit = leastsq(residuals, center_estimate)[0] #最適解のみを取り出す じゃないと下の計算ができない
             radius_fit = np.mean(calc_R(*center_fit))
         
             return center_fit, radius_fit
@@ -69,10 +73,11 @@ class PillarCenter:
                     rospy.loginfo("Detected %d candidate points for pillar", len(points))
                     rospy.loginfo("Fitted circle center: (%.2f, %.2f), radius: %.2f", center[0], center[1], radius)
 
-                    if 0.1 < radius < 0.6:
+                    if 0.05 < radius < 2.5:
                         centers.append(center)
                         
             if len(centers) >= 2:
+                rospy.loginfo("Number of centers are two over!")
                 mid_x = (centers[0][0] + centers[1][0]) / 2.0
                 mid_y = (centers[0][1] + centers[1][1]) / 2.0
                         #この座標に寄せる
