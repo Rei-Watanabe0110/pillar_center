@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   actionlib_msgs
   visualization_msgs
   nav_msgs
+  tf
 )
 
 ## System dependencies are found with CMake's conventions
@@ -111,7 +112,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES pillar_center
-   CATKIN_DEPENDS rospy std_msgs geometry_msgs sensor_msgs actionlib actionlib_msgs move_base_msgs visualization_msgs nav_msgs
+   CATKIN_DEPENDS rospy std_msgs geometry_msgs sensor_msgs actionlib actionlib_msgs move_base_msgs visualization_msgs nav_msgs tf
 #  DEPENDS system_lib
 )
 
